@@ -1,0 +1,3 @@
+pika
+pydantic
+pydantic-settings
