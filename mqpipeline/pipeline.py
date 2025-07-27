@@ -38,6 +38,8 @@ class MQPipeline:
         self._publisher_conninfo = {
             "publisher_connection": None,
             "publisher_channel": None,
+            "error_connection": None,
+            "error_channel": None
         }
 
     def _connect_rabbitmq(self, url:str, queue_name:str):
@@ -48,7 +50,7 @@ class MQPipeline:
             if parameters.client_properties is None:
                 parameters.client_properties = {}
 
-            parameters.client_properties["connection_name"] = f"{self._config.mq_application}-{queue_name}"
+            parameters.client_properties["connection_name"] = f"{self._config.mq_application}-{queue_name}-{self._config.mq_client_hostname}"
             parameters.heartbeat = 60
             parameters.retry_delay = 5
             parameters.connection_attempts = 5
@@ -125,6 +127,69 @@ class MQPipeline:
                 logger.error("Unexpected error while publishing message: %s", e)
                 raise RuntimeError(f"Unexpected error while publishing message: {e}") from e
 
+    def _ensure_error_connection(self):
+        """Ensure the error connection is established."""
+        with self._publisher_conninfo_lock:
+            error_connection = self._publisher_conninfo.get("error_connection")
+            error_channel = self._publisher_conninfo.get("error_channel")
+            if not error_connection or error_connection.is_closed:
+                url = f"amqp://{self._config.mq_user}:{self._config.mq_password}@{self._config.mq_host}/{self._config.mq_vhost}"
+                error_connection, error_channel = self._connect_rabbitmq(url, self._config.error_queue)
+            # create queue if it does not exist with durable and quorum settings
+            error_channel.queue_declare(
+                queue=self._config.error_queue,
+                durable=True,
+                arguments={
+                    "x-queue-type": "quorum"
+                }
+            )
+            # Ensure the exchange exists
+            error_channel.exchange_declare(
+                exchange=self._config.error_exchange,
+                exchange_type='direct',
+                durable=True
+            )
+            # Bind the queue to the exchange with the routing key
+            error_channel.queue_bind(
+                queue=self._config.error_queue,
+                exchange=self._config.error_exchange,
+                routing_key=self._config.error_routing_key
+            )
+
+            self._publisher_conninfo["error_connection"] = error_connection
+            self._publisher_conninfo["error_channel"] = error_channel
+
+    def _publish_error(self, message):
+        """Publish an error message to the configured exchange and routing key."""
+        max_retries = 3
+        retries = 0
+        while retries < max_retries:
+            try:
+                self._ensure_error_connection()
+                error_channel = self._publisher_conninfo["error_channel"]
+                error_channel.basic_publish(
+                    exchange=self._config.error_exchange,
+                    routing_key=self._config.error_routing_key,
+                    body=message,
+                    properties=BasicProperties(
+                        delivery_mode=2,  # Make message persistent
+                    )
+                )
+                logger.debug("Message published successfully.")
+                return
+            except (ConnectionClosedByBroker, AMQPConnectionError, ChannelClosedByBroker, ChannelWrongStateError) as e:
+                retries += 1
+                logger.error("Failed to publish message: %s. Retrying %d/%d", e, retries, max_retries)
+                self._publisher_conninfo["error_connection"] = None
+                self._publisher_conninfo["error_channel"] = None
+                if retries >= max_retries:
+                    raise RuntimeError(f"Failed to publish error message after {max_retries} attempts") from e
+
+                time.sleep(2 ** retries)
+            except Exception as e:
+                logger.error("Unexpected error while publishing error message: %s", e)
+                raise RuntimeError(f"Unexpected error while publishing error message: {e}") from e
+
     def stop(self):
         """Stop the MQPipeline gracefully."""
         logger.info("Stopping MQPipeline...")
@@ -148,8 +213,26 @@ class MQPipeline:
                 except Exception as e: #pylint: disable=broad-except
                     logger.error("Error closing publisher connection: %s", e)
 
+            error_connection = self._publisher_conninfo.get("error_connection")
+            if error_connection and not error_connection.is_closed:
+                try:
+                    error_channel = self._publisher_conninfo["error_channel"]
+                    if error_channel and not error_channel.is_closed:
+                        error_channel.close()
+                        logger.info("Error channel closed.")
+                except Exception as e: #pylint: disable=broad-except
+                    logger.error("Error closing error channel: %s", e)
+
+                try:
+                    error_connection.close()
+                    logger.info("Error connection closed.")
+                except Exception as e: #pylint: disable=broad-except
+                    logger.error("Error closing error connection: %s", e)
+
             self._publisher_conninfo["publisher_connection"] = None
             self._publisher_conninfo["publisher_channel"] = None
+            self._publisher_conninfo["error_connection"] = None
+            self._publisher_conninfo["error_channel"] = None
         # Clear internal queues
         for q in self._internal_queues.values():
             while not q.empty():
@@ -266,7 +349,10 @@ class MQPipeline:
                 ch, method, properties, body = self._internal_queues["processing_queue"].get(timeout=0.1)
                 logger.info("Processing message with delivery_tag %s and properties %s", method.delivery_tag, properties)
                 try:
-                    if self._single_message_handler(body, self._publish):
+                    publish_error = None
+                    if self._config.mq_has_error_queue:
+                        publish_error = self._publish_error
+                    if self._single_message_handler(body, self._publish, publish_error):
                         logger.info("Message processed successfully, acknowledging...")
                         self._internal_queues["ack_queue"].put((ch, method.delivery_tag, "ack"))
                     else:
