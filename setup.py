@@ -13,7 +13,7 @@ setup(
     version="0.1.0",
     packages=find_packages(),
     install_requires=load_requirements(),
-    author="Your Name",
+    author="Kazım SARIKAYA",
     description="A reusable RabbitMQ pipeline handler for publishing and consuming messages.",
     classifiers=[
         "Programming Language :: Python :: 3",

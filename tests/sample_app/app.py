@@ -72,11 +72,6 @@ pika_logger.setLevel(logging.WARNING)
 # Create a logger for this module
 logger = logging.getLogger(__name__)
 
-# Load configuration from environment variables using MQPipelineConfig
-config = MQPipelineConfig.from_env_keys()
-# Log the configuration for debugging
-logger.debug("MQPipelineConfig: %s", config)
-
 def handle_single_message(message, publish, publish_error=None):
     """Handle a single message from the subscriber queue.
 
@@ -165,43 +160,62 @@ def handle_single_message(message, publish, publish_error=None):
     # Acknowledge the message since it was processed successfully
     return True
 
-# Initialize the MQPipeline with the configuration and message handler
-pipeline = MQPipeline(
-    config=config,
-    single_message_handler=handle_single_message
-)
+def main():
+    """Main entry point for the MQPipeline example application.
 
-def handle_sigterm(_signum, _frame):
-    """Handle SIGTERM signal to shut down the application gracefully.
-
-    Called when the application receives a SIGTERM signal (e.g., from `podman kill` or
-    a process manager). Stops the `MQPipeline` and exits the application cleanly.
-
-    Args:
-        _signum (int): The signal number (e.g., signal.SIGTERM).
-        _frame (frame): The current stack frame (unused).
-
-    Example:
-        Simulate a SIGTERM signal:
-
-        .. code-block:: python
-
-            import signal
-            handle_sigterm(signal.SIGTERM, None)
-            # Logs "Received SIGTERM, shutting down gracefully..." and stops the pipeline
+    Initializes the MQPipeline with configuration from environment variables,
+    sets up the message handler, and starts consuming messages from the queue.
+    This function is called when the script is run directly.
     """
-    # Log the SIGTERM signal for debugging
-    logger.info("Received SIGTERM, shutting down gracefully...")
-    # Stop the pipeline to close connections and threads
-    pipeline.stop()
-    # Exit the application cleanly
-    sys.exit(0)
 
-# Register the SIGTERM handler to ensure graceful shutdown
-signal.signal(signal.SIGTERM, handle_sigterm)
+    def handle_sigterm(_signum, _frame):
+        """Handle SIGTERM signal to shut down the application gracefully.
 
-# Start the pipeline to begin consuming and processing messages
-pipeline.start()
+        Called when the application receives a SIGTERM signal (e.g., from `podman kill` or
+        a process manager). Stops the `MQPipeline` and exits the application cleanly.
 
-# Keep the application running, waiting for messages or shutdown
-pipeline.join()
+        Args:
+            _signum (int): The signal number (e.g., signal.SIGTERM).
+            _frame (frame): The current stack frame (unused).
+
+        Example:
+            Simulate a SIGTERM signal:
+
+            .. code-block:: python
+
+                import signal
+                handle_sigterm(signal.SIGTERM, None)
+                # Logs "Received SIGTERM, shutting down gracefully..." and stops the pipeline
+        """
+        # Import the global pipeline instance to stop it
+        # Log the SIGTERM signal for debugging
+        logger.info("Received SIGTERM, shutting down gracefully...")
+        # Stop the pipeline to close connections and threads
+        pipeline.stop()
+        # Exit the application cleanly
+        sys.exit(0)
+
+    # Register the SIGTERM handler to ensure graceful shutdown
+    signal.signal(signal.SIGTERM, handle_sigterm)
+
+
+    # Load configuration from environment variables using MQPipelineConfig
+    config = MQPipelineConfig.from_env_keys()
+    # Log the configuration for debugging
+    logger.debug("MQPipelineConfig: %s", config)
+
+    # Initialize the MQPipeline with the configuration and message handler
+    pipeline = MQPipeline(
+        config=config,
+        single_message_handler=handle_single_message
+    )
+
+    # Start the pipeline to begin consuming and processing messages
+    pipeline.start()
+
+    # Keep the application running, waiting for messages or shutdown
+    pipeline.join()
+
+if __name__ == "__main__":
+    # Run the main function when the script is executed directly
+    main()
