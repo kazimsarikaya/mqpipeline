@@ -47,116 +47,84 @@ from pydantic_settings import BaseSettings
 class MQPipelineConfig(BaseSettings):
     """Configuration class for MQPipeline using Pydantic.
 
-    This class defines settings for connecting to RabbitMQ and configuring message queues
-    for publishing and subscribing. It uses Pydantic to load values from environment variables
-    or a `.env` file. Fields are grouped into:
+    Defines settings for connecting to RabbitMQ and configuring message queues
+    for publishing and subscribing. Values are loaded from environment variables
+    or a `.env` file using Pydantic's `BaseSettings`.
+
+    Fields include:
     - Shared RabbitMQ connection settings (e.g., host, user, password).
-    - Publisher and subscriber queue settings (e.g., exchange, queue, routing key).
-    - Optional error queue settings, enabled by `mq_has_error_queue`.
+    - Publisher and subscriber queue settings.
+    - Optional error queue settings, enabled via `mq_has_error_queue`.
 
-    Attributes:
-        mq_application (str): Name of the application using MQPipeline. Identifies the
-            application in logs and RabbitMQ connection names. Loaded from `MQ_APPLICATION`.
-            Default: "application".
-        mq_host (str): Hostname or IP address of the RabbitMQ server (e.g., "localhost" or
-            "rabbitmq"). Required, loaded from `MQ_HOST`. No default.
-        mq_vhost (str): RabbitMQ virtual host, a logical grouping of queues and exchanges
-            (e.g., "/" or "my_vhost"). Loaded from `MQ_VHOST`. Default: empty string.
-        mq_user (str): Username for RabbitMQ authentication. Required, loaded from `MQ_USER`.
-            No default.
-        mq_password (str): Password for RabbitMQ authentication. Required, loaded from
-            `MQ_PASSWORD`. No default.
-        mq_fetch_count (int): Number of messages to prefetch from the subscriber queue at
-            once. Controls how many messages are fetched before processing. Loaded from
-            `MQ_FETCH_COUNT`. Default: 1.
-        publisher_exchange (str): Name of the RabbitMQ exchange for publishing messages.
-            Exchanges route messages to queues. Required, loaded from `MQ_PUBLISHER_EXCHANGE`.
-            No default.
-        publisher_queue (str): Name of the RabbitMQ queue for publishing messages. Required,
-            loaded from `MQ_PUBLISHER_QUEUE`. No default.
-        publisher_routing_key (str): Routing key for binding the publisher queue to its
-            exchange. Determines which messages go to the queue. Required, loaded from
-            `MQ_PUBLISHER_ROUTING_KEY`. No default.
-        subscriber_exchange (str): Name of the RabbitMQ exchange for subscribing to messages.
-            Required, loaded from `MQ_SUBSCRIBER_EXCHANGE`. No default.
-        subscriber_queue (str): Name of the RabbitMQ queue for receiving messages. Required,
-            loaded from `MQ_SUBSCRIBER_QUEUE`. No default.
-        subscriber_routing_key (str): Routing key for binding the subscriber queue to its
-            exchange. Required, loaded from `MQ_SUBSCRIBER_ROUTING_KEY`. No default.
-        mq_has_error_queue (bool): Whether to enable an error queue for failed messages.
-            If True, error queue fields are required; if False, they are optional. Loaded
-            from `MQ_HAS_ERROR_QUEUE` (accepts "true", "1", "yes"). Default: False.
-        error_exchange (str | None): Name of the RabbitMQ exchange for the error queue.
-            Required if `mq_has_error_queue` is True, otherwise optional. Loaded from
-            `MQ_ERROR_EXCHANGE`. Default: None.
-        error_queue (str | None): Name of the RabbitMQ queue for failed messages. Required
-            if `mq_has_error_queue` is True, otherwise optional. Loaded from `MQ_ERROR_QUEUE`.
-            Default: None.
-        error_routing_key (str | None): Routing key for the error queue. Required if
-            `mq_has_error_queue` is True, otherwise optional. Loaded from `MQ_ERROR_ROUTING_KEY`.
-            Default: None.
+    Example
+    -------
+    Create a configuration with an error queue::
 
-    Example:
-        Create a configuration with an error queue:
+        import os
+        os.environ["MQ_HOST"] = "rabbitmq"
+        os.environ["MQ_USER"] = "guest"
+        os.environ["MQ_PASSWORD"] = "guest"
+        os.environ["MQ_APPLICATION"] = "my_app"
+        os.environ["MQ_PUBLISHER_EXCHANGE"] = "pub_ex"
+        os.environ["MQ_PUBLISHER_QUEUE"] = "pub_queue"
+        os.environ["MQ_PUBLISHER_ROUTING_KEY"] = "pub_key"
+        os.environ["MQ_SUBSCRIBER_EXCHANGE"] = "sub_ex"
+        os.environ["MQ_SUBSCRIBER_QUEUE"] = "sub_queue"
+        os.environ["MQ_SUBSCRIBER_ROUTING_KEY"] = "sub_key"
+        os.environ["MQ_HAS_ERROR_QUEUE"] = "true"
+        os.environ["MQ_ERROR_EXCHANGE"] = "err_ex"
+        os.environ["MQ_ERROR_QUEUE"] = "err_queue"
+        os.environ["MQ_ERROR_ROUTING_KEY"] = "err_key"
 
-        .. code-block:: python
+        config = MQPipelineConfig.from_env_keys()
+        print(config)  # Shows all fields, including error_exchange='err_ex'
 
-            import os
-            os.environ["MQ_HOST"] = "rabbitmq"
-            os.environ["MQ_USER"] = "guest"
-            os.environ["MQ_PASSWORD"] = "guest"
-            os.environ["MQ_APPLICATION"] = "my_app"
-            os.environ["MQ_PUBLISHER_EXCHANGE"] = "pub_ex"
-            os.environ["MQ_PUBLISHER_QUEUE"] = "pub_queue"
-            os.environ["MQ_PUBLISHER_ROUTING_KEY"] = "pub_key"
-            os.environ["MQ_SUBSCRIBER_EXCHANGE"] = "sub_ex"
-            os.environ["MQ_SUBSCRIBER_QUEUE"] = "sub_queue"
-            os.environ["MQ_SUBSCRIBER_ROUTING_KEY"] = "sub_key"
-            os.environ["MQ_HAS_ERROR_QUEUE"] = "true"
-            os.environ["MQ_ERROR_EXCHANGE"] = "err_ex"
-            os.environ["MQ_ERROR_QUEUE"] = "err_queue"
-            os.environ["MQ_ERROR_ROUTING_KEY"] = "err_key"
+    Without error queue::
 
-            config = MQPipelineConfig.from_env_keys()
-            print(config)  # Shows all fields, including error_exchange='err_ex'
-
-        Without error queue:
-
-        .. code-block:: python
-
-            os.environ["MQ_HAS_ERROR_QUEUE"] = "false"
-            config = MQPipelineConfig.from_env_keys()
-            print(config.error_exchange)  # Outputs: None
+        os.environ["MQ_HAS_ERROR_QUEUE"] = "false"
+        config = MQPipelineConfig.from_env_keys()
+        print(config.error_exchange)  # Outputs: None
     """
 
     # Shared system-wide MQ config
-    mq_application: str = Field("application", env="MQ_APPLICATION")
-    mq_host: str = Field(..., env="MQ_HOST")
-    mq_vhost: str = Field("", env="MQ_VHOST")
-    mq_user: str = Field(..., env="MQ_USER")
-    mq_password: str = Field(..., env="MQ_PASSWORD")
-    mq_fetch_count: int = Field(1, env="MQ_FETCH_COUNT")
+    mq_application: str = Field("application", env="MQ_APPLICATION",
+                                description="Name of the application using MQ")
+    mq_host: str = Field(..., env="MQ_HOST",
+                         description="Hostname of the RabbitMQ server")
+    mq_vhost: str = Field("", env="MQ_VHOST",
+                          description="Virtual host on the RabbitMQ server (default is empty)")
+    mq_user: str = Field(..., env="MQ_USER",
+                         description="Username for RabbitMQ authentication")
+    mq_password: str = Field(..., env="MQ_PASSWORD",
+                             description="Password for RabbitMQ authentication")
+    mq_fetch_count: int = Field(1, env="MQ_FETCH_COUNT",
+                                description="Number of messages to fetch at once (default is 1)")
 
     # App-specific keys (optional, with defaults from env or empty strings)
-    publisher_exchange: str = Field(..., env="MQ_PUBLISHER_EXCHANGE")
-    publisher_queue: str = Field(..., env="MQ_PUBLISHER_QUEUE")
-    publisher_routing_key: str = Field(..., env="MQ_PUBLISHER_ROUTING_KEY")
-    subscriber_exchange: str = Field(..., env="MQ_SUBSCRIBER_EXCHANGE")
-    subscriber_queue: str = Field(..., env="MQ_SUBSCRIBER_QUEUE")
-    subscriber_routing_key: str = Field(..., env="MQ_SUBSCRIBER_ROUTING_KEY")
-    mq_has_error_queue: bool = Field(False, env="MQ_HAS_ERROR_QUEUE")
-    error_exchange: str | None = Field(None, env="MQ_ERROR_EXCHANGE")
-    error_queue: str | None = Field(None, env="MQ_ERROR_QUEUE")
-    error_routing_key: str | None = Field(None, env="MQ_ERROR_ROUTING_KEY")
+    publisher_exchange: str = Field(..., env="MQ_PUBLISHER_EXCHANGE",
+                                    description="Exchange for publishing messages")
+    publisher_queue: str = Field(..., env="MQ_PUBLISHER_QUEUE",
+                                 description="Queue for publishing messages")
+    publisher_routing_key: str = Field(..., env="MQ_PUBLISHER_ROUTING_KEY",
+                                       description="Routing key for publishing messages")
+    subscriber_exchange: str = Field(..., env="MQ_SUBSCRIBER_EXCHANGE",
+                                     description="Exchange for subscribing to messages")
+    subscriber_queue: str = Field(..., env="MQ_SUBSCRIBER_QUEUE",
+                                  description="Queue for subscribing to messages")
+    subscriber_routing_key: str = Field(..., env="MQ_SUBSCRIBER_ROUTING_KEY",
+                                        description="Routing key for subscribing to messages")
+    mq_has_error_queue: bool = Field(False, env="MQ_HAS_ERROR_QUEUE",
+                                     description="Flag indicating if error queue is enabled")
+    error_exchange: str | None = Field(None, env="MQ_ERROR_EXCHANGE",
+                                       description="Exchange for error messages")
+    error_queue: str | None = Field(None, env="MQ_ERROR_QUEUE",
+                                    description="Queue for error messages")
+    error_routing_key: str | None = Field(None, env="MQ_ERROR_ROUTING_KEY",
+                                          description="Routing key for error messages")
 
     class Config:  # pylint: disable=too-few-public-methods
-        """Pydantic configuration settings for MQPipelineConfig.
-
-        Configures how Pydantic processes environment variables and `.env` files.
-
-        Attributes:
-            env_file_encoding (str): Encoding for `.env` files, set to "utf-8" for
-                consistent reading of environment variables.
+        """Pydantic config class.
+        .. note:: `env_file_encoding` is not indexed to avoid duplication.
         """
         env_file_encoding = "utf-8"
 

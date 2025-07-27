@@ -70,61 +70,67 @@ class MQPipeline:
 
     The `MQPipeline` class connects to a RabbitMQ server using settings from
     `MQPipelineConfig`. It runs two threads:
-    - A subscriber thread that consumes messages from a RabbitMQ queue and puts them
-      into an internal processing queue.
+
+    - A subscriber thread that consumes messages from a RabbitMQ queue and puts them into an internal processing queue.
     - A consumer thread that processes messages using a user-provided handler function.
+
     It supports publishing messages to a publisher queue and, if enabled, an error queue
     for failed messages. The class handles connection errors with retries and ensures
     graceful shutdown on SIGTERM or SIGINT.
 
-    Attributes:
-        _config (MQPipelineConfig): Configuration object with RabbitMQ and queue settings.
-        _single_message_handler (callable): User-provided function to process messages.
-            It takes three arguments: the message (bytes), a publish function, and an
-            optional publish_error function.
-        _internal_queues (dict): Internal queues for processing and acknowledging messages.
-            Contains "processing_queue" (Queue) and "ack_queue" (Queue).
-        _internal_threads (dict): Threads and events for managing the pipeline. Contains
-            "stop_event" (Event), "consumer_thread" (Thread), and "subscriber_thread" (Thread).
-        _publisher_conninfo_lock (Lock): Thread lock for synchronizing access to publisher
-            and error queue connections.
-        _publisher_conninfo (dict): Connection and channel information for publisher and
-            error queues. Contains "publisher_connection", "publisher_channel",
-            "error_connection", and "error_channel".
+    Attributes
+    ----------
+    _config : MQPipelineConfig
+        Configuration object with RabbitMQ and queue settings.
+    _single_message_handler : callable
+        User-provided function to process messages.
+        It takes three arguments: the message (bytes), a publish function, and an
+        optional publish_error function.
+    _internal_queues : dict
+        Internal queues for processing and acknowledging messages.
+        Contains "processing_queue" (Queue) and "ack_queue" (Queue).
+    _internal_threads : dict
+        Threads and events for managing the pipeline. Contains
+        "stop_event" (Event), "consumer_thread" (Thread), and "subscriber_thread" (Thread).
+    _publisher_conninfo_lock : Lock
+        Thread lock for synchronizing access to publisher and error queue connections.
+    _publisher_conninfo : dict
+        Connection and channel information for publisher and error queues.
+        Contains "publisher_connection", "publisher_channel",
+        "error_connection", and "error_channel".
 
-    Example:
-        Create a pipeline with an error queue and custom handler:
+    Example
+    -------
+    Create a pipeline with an error queue and custom handler::
 
-        .. code-block:: python
+        def handle_message(message, publish, publish_error):
+            try:
+                print(f"Processing: {message.decode()}")
+                publish(b"Success: " + message)
+                return True
+            except Exception:
+                publish_error(b"Failed: " + message)
+                return False
 
-            def handle_message(message, publish, publish_error):
-                try:
-                    print(f"Processing: {message.decode()}")
-                    publish(b"Success: " + message)
-                    return True
-                except Exception:
-                    publish_error(b"Failed: " + message)
-                    return False
-
-            config = MQPipelineConfig(
-                mq_host="localhost",
-                mq_user="guest",
-                mq_password="guest",
-                mq_vhost="/",
-                mq_application="test_app",
-                publisher_exchange="pub_ex",
-                publisher_queue="pub_queue",
-                publisher_routing_key="pub_key",
-                subscriber_exchange="sub_ex",
-                subscriber_queue="sub_queue",
-                subscriber_routing_key="sub_key",
-                mq_has_error_queue=True,
-                error_exchange="err_ex",
-                error_queue="err_queue",
-                error_routing_key="err_key"
-            )
-            pipeline = MQPipeline(config=config, single_message_handler=handle_message)
-            pipeline.start()
+        config = MQPipelineConfig(
+            mq_host="localhost",
+            mq_user="guest",
+            mq_password="guest",
+            mq_vhost="/",
+            mq_application="test_app",
+            publisher_exchange="pub_ex",
+            publisher_queue="pub_queue",
+            publisher_routing_key="pub_key",
+            subscriber_exchange="sub_ex",
+            subscriber_queue="sub_queue",
+            subscriber_routing_key="sub_key",
+            mq_has_error_queue=True,
+            error_exchange="err_ex",
+            error_queue="err_queue",
+            error_routing_key="err_key"
+        )
+        pipeline = MQPipeline(config=config, single_message_handler=handle_message)
+        pipeline.start()
     """
 
     def __init__(self, config: MQPipelineConfig, single_message_handler: callable):
