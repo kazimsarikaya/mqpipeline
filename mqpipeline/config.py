@@ -19,9 +19,10 @@ class MQPipelineConfig(BaseSettings):
     mq_fetch_count: int = Field(1, env="MQ_FETCH_COUNT")
 
     # App-specific keys (optional, with defaults from env or empty strings)
-    exchange: str = Field(..., env="MQ_EXCHANGE")
+    publisher_exchange: str = Field(..., env="MQ_PUBLISHER_EXCHANGE")
     publisher_queue: str = Field(..., env="MQ_PUBLISHER_QUEUE")
     publisher_routing_key: str = Field(..., env="MQ_PUBLISHER_ROUTING_KEY")
+    subscriber_exchange: str = Field(..., env="MQ_SUBSCRIBER_EXCHANGE")
     subscriber_queue: str = Field(..., env="MQ_SUBSCRIBER_QUEUE")
     subscriber_routing_key: str = Field(..., env="MQ_SUBSCRIBER_ROUTING_KEY")
 
@@ -33,17 +34,19 @@ class MQPipelineConfig(BaseSettings):
     def from_env_keys(cls, env_keys: Mapping[str, str] = None):
         """Create an instance of MQPipelineConfig from environment variables."""
         default_keys = {
-            "exchange": "MQ_EXCHANGE",
+            "publisher_exchange": "MQ_PUBLISHER_EXCHANGE",
             "publisher_queue": "MQ_PUBLISHER_QUEUE",
             "publisher_routing_key": "MQ_PUBLISHER_ROUTING_KEY",
+            "subscriber_exchange": "MQ_SUBSCRIBER_EXCHANGE",
             "subscriber_queue": "MQ_SUBSCRIBER_QUEUE",
             "subscriber_routing_key": "MQ_SUBSCRIBER_ROUTING_KEY",
         }
         env_keys = {**default_keys, **(env_keys or {})}
         env_overrides = {
-            "exchange": cls._get_required_env(env_keys["exchange"]),
+            "publisher_exchange": cls._get_required_env(env_keys["publisher_exchange"]),
             "publisher_queue": cls._get_required_env(env_keys["publisher_queue"]),
             "publisher_routing_key": cls._get_required_env(env_keys["publisher_routing_key"]),
+            "subscriber_exchange": cls._get_required_env(env_keys["subscriber_exchange"]),
             "subscriber_queue": cls._get_required_env(env_keys["subscriber_queue"]),
             "subscriber_routing_key": cls._get_required_env(env_keys["subscriber_routing_key"]),
         }

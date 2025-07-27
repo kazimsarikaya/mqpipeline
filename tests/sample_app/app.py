@@ -16,7 +16,7 @@ pika_logger.setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Config
-config = MQPipelineConfig.from_env_keys({"exchange": "MQ_EXCHANGE2",})
+config = MQPipelineConfig.from_env_keys()
 logger.debug(f"MQPipelineConfig: {config}")
 
 def handle_single_message(message,publish):

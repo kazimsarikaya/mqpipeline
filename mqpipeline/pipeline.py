@@ -59,7 +59,7 @@ class MQPipeline:
 
             return connection, connection.channel()
         except Exception as e:
-            logger.error("Failed to connect to RabbitMQ: %s", (e,))
+            logger.error("Failed to connect to RabbitMQ: %s", e)
             raise RuntimeError(f"Failed to connect to RabbitMQ: {e}") from e
 
     def _ensure_publisher_connection(self):
@@ -80,14 +80,14 @@ class MQPipeline:
             )
             # Ensure the exchange exists
             publisher_channel.exchange_declare(
-                exchange=self._config.exchange,
+                exchange=self._config.publisher_exchange,
                 exchange_type='direct',
                 durable=True
             )
             # Bind the queue to the exchange with the routing key
             publisher_channel.queue_bind(
                 queue=self._config.publisher_queue,
-                exchange=self._config.exchange,
+                exchange=self._config.publisher_exchange,
                 routing_key=self._config.publisher_routing_key
             )
 
@@ -103,7 +103,7 @@ class MQPipeline:
                 self._ensure_publisher_connection()
                 publisher_channel = self._publisher_conninfo["publisher_channel"]
                 publisher_channel.basic_publish(
-                    exchange=self._config.exchange,
+                    exchange=self._config.publisher_exchange,
                     routing_key=self._config.publisher_routing_key,
                     body=message,
                     properties=BasicProperties(
@@ -155,6 +155,7 @@ class MQPipeline:
             while not q.empty():
                 try:
                     q.get_nowait()
+                    q.task_done()
                 except q.Empty:
                     break
 
@@ -163,6 +164,16 @@ class MQPipeline:
     def _setup_subscriber_channel(self, channel: BlockingConnection.channel, queue_name: str) -> BlockingConnection.channel:
         """Set up the subscriber channel with queue declaration and consumption."""
         channel.queue_declare(queue=queue_name, durable=True, arguments={"x-queue-type": "quorum"})
+        channel.exchange_declare(
+            exchange=self._config.subscriber_exchange,
+            exchange_type='direct',
+            durable=True
+        )
+        channel.queue_bind(
+            queue=queue_name,
+            exchange=self._config.subscriber_exchange,
+            routing_key=self._config.subscriber_routing_key
+        )
         channel.basic_consume(queue=queue_name, on_message_callback=self._callback, auto_ack=False)
         return channel
 
@@ -180,15 +191,15 @@ class MQPipeline:
         logger.info("MQPipeline started.")
 
     def join(self, timeout=None):
-        """Join the consumer thread, blocking until it finishes or timeout occurs."""
-        consumer_thread = self._internal_threads["consumer_thread"]
-        if consumer_thread.is_alive():
-            logger.info("Waiting for MQPipeline to finish processing...")
-            consumer_thread.join(timeout)
-            if consumer_thread.is_alive():
-                logger.warning("MQPipeline is still running after join timeout.")
-        else:
-            logger.info("MQPipeline has already finished processing.")
+        """Wait for the MQPipeline to shut down gracefully."""
+        logger.info("Waiting for MQPipeline to complete...")
+        self._internal_threads["stop_event"].wait() # Wait for stop event to be set
+        for thread_name, thread in self._internal_threads.items():
+            if thread_name != "stop_event" and thread.is_alive():
+                thread.join(timeout=timeout or 15)
+                if thread.is_alive():
+                    logger.warning("Thread %s still running after timeout.", thread_name)
+        logger.info("MQPipeline shutdown complete.")
 
     def _run_consumer(self):
         """Run the consumer loop in a separate thread."""
@@ -220,6 +231,7 @@ class MQPipeline:
         finally:
             try:
                 connection.close()
+                logger.info("Subscriber connection closed.")
             except Exception as e: #pylint: disable=broad-except
                 logger.error("Error closing subscriber connection: %s", e, exc_info=True)
 

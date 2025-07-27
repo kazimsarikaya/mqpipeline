@@ -16,8 +16,6 @@ services:
     env_file:
       - .env
     depends_on:
-      - rabbitmq  # ignore condition since it's not reliable
-    volumes:
-      - ./scripts/wait-for-rabbit.sh:/scripts/wait-for-rabbit.sh:ro
-    command: [ "sh", "-c", "/scripts/wait-for-rabbit.sh" ]
+      rabbitmq:
+        condition: service_started
     restart: always
