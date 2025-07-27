@@ -1,7 +1,5 @@
 #!/bin/sh
 
-apt update && apt install -y --no-install-recommends netcat-openbsd
-
 echo "[wait-for-rabbit] Waiting for RabbitMQ..."
 
 RETRIES=30

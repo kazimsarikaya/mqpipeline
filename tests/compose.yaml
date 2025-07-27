@@ -19,5 +19,5 @@ services:
       - rabbitmq  # ignore condition since it's not reliable
     volumes:
       - ./scripts/wait-for-rabbit.sh:/scripts/wait-for-rabbit.sh:ro
-    entrypoint: [ "sh", "-c", "/scripts/wait-for-rabbit.sh" ]
+    command: [ "sh", "-c", "/scripts/wait-for-rabbit.sh" ]
     restart: always

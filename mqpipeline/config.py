@@ -11,8 +11,9 @@ class MQPipelineConfig(BaseSettings):
     """Configuration for MQPipeline."""
 
     # Shared system-wide MQ config
+    mq_application: str = Field("application", env="MQ_APPLICATION")
     mq_host: str = Field(..., env="MQ_HOST")
-    mq_vhost: str = Field(..., env="MQ_VHOST")
+    mq_vhost: str = Field("", env="MQ_VHOST")
     mq_user: str = Field(..., env="MQ_USER")
     mq_password: str = Field(..., env="MQ_PASSWORD")
     mq_fetch_count: int = Field(1, env="MQ_FETCH_COUNT")
