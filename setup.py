@@ -23,8 +23,18 @@ setup(
     install_requires=load_requirements(),
     author="Kazım SARIKAYA",
     description="A reusable RabbitMQ pipeline handler for publishing and consuming messages.",
+    license="MIT",
     long_description=load_readme(),
+    long_description_content_type="text/markdown",  # Important for README.md
+    url="https://github.com/kazimsarikaya/mqpipeline",  # Optional but encouraged
     classifiers=[
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Operating System :: OS Independent",
     ],
+    python_requires=">=3.8"
 )
