@@ -10,3 +10,4 @@ python:
       path: .
 sphinx:
   configuration: docs/conf.py
+  source: docs
